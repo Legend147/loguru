@@ -616,6 +616,9 @@ namespace loguru
 	LOGURU_EXPORT
 	void log(Verbosity verbosity, const char* file, unsigned line, LOGURU_FORMAT_STRING_TYPE format, ...) LOGURU_PRINTF_LIKE(4, 5);
 
+	LOGURU_EXPORT
+	void log_va_list(Verbosity verbosity, const char* file, unsigned line, LOGURU_FORMAT_STRING_TYPE format, void* actually_a_valist);
+
 	// Log without any preamble or indentation.
 	LOGURU_EXPORT
 	void raw_log(Verbosity verbosity, const char* file, unsigned line, LOGURU_FORMAT_STRING_TYPE format, ...) LOGURU_PRINTF_LIKE(4, 5);
@@ -627,6 +630,7 @@ namespace loguru
 	public:
 		LogScopeRAII() : _file(nullptr) {} // No logging
 		LogScopeRAII(Verbosity verbosity, const char* file, unsigned line, LOGURU_FORMAT_STRING_TYPE format, ...) LOGURU_PRINTF_LIKE(5, 6);
+		LogScopeRAII(LogScopeRAII*, Verbosity verbosity, const char* file, unsigned line, LOGURU_FORMAT_STRING_TYPE format, void* actually_a_valist); // First argument is only to distinguish this constructor and prevent it from being called when the user accidentally passes a void*
 		~LogScopeRAII();
 
 #if defined(_MSC_VER) && _MSC_VER > 1800
@@ -651,6 +655,8 @@ namespace loguru
 #endif
 
 	private:
+		void init();
+
 		LogScopeRAII(const LogScopeRAII&) = delete;
 		LogScopeRAII& operator=(const LogScopeRAII&) = delete;
 		void operator=(LogScopeRAII&&) = delete;
@@ -2743,6 +2749,13 @@ namespace loguru
 		va_end(vlist);
 	}
 
+	void log_va_list(Verbosity verbosity, const char* file, unsigned line, const char* format, void* actually_a_valist)
+	{
+		va_list* vlist = (va_list*) actually_a_valist;
+		auto buff = vtextprintf(format, *vlist);
+		log_to_everywhere(1, verbosity, file, line, "", buff.c_str());
+	}
+
 	void raw_log(Verbosity verbosity, const char* file, unsigned line, const char* format, ...)
 	{
 		va_list vlist;
@@ -2770,27 +2783,44 @@ namespace loguru
 	LogScopeRAII::LogScopeRAII(Verbosity verbosity, const char* file, unsigned line, const char* format, ...)
 		: _verbosity(verbosity), _file(file), _line(line)
 	{
-		if (verbosity <= current_verbosity_cutoff()) {
-			std::lock_guard<std::recursive_mutex> lock(s_mutex);
-			_indent_stderr = (verbosity <= g_stderr_verbosity);
-			_start_time_ns = now_ns();
+		if (verbosity<=current_verbosity_cutoff()) {
 			va_list vlist;
 			va_start(vlist, format);
 			vsnprintf(_name, sizeof(_name), format, vlist);
-			log_to_everywhere(1, _verbosity, file, line, "{ ", _name);
 			va_end(vlist);
-
-			if (_indent_stderr) {
-				++s_stderr_indentation;
-			}
-
-			for (auto& p : s_callbacks) {
-				if (verbosity <= p.verbosity) {
-					++p.indentation;
-				}
-			}
+			init();
 		} else {
 			_file = nullptr;
+		}
+	}
+
+	LogScopeRAII::LogScopeRAII(LogScopeRAII*, Verbosity verbosity, const char *file, unsigned line, LOGURU_FORMAT_STRING_TYPE format, void* actually_a_valist)
+		: _verbosity(verbosity), _file(file), _line(line)
+	{
+		va_list* vlist = (va_list*)actually_a_valist;
+		if (verbosity<=current_verbosity_cutoff()) {
+			vsnprintf(_name, sizeof(_name), format, *vlist);
+			init();
+		} else {
+			_file = nullptr;
+		}
+	}
+
+	void LogScopeRAII::init()
+	{
+		std::lock_guard<std::recursive_mutex> lock(s_mutex);
+		_indent_stderr = (_verbosity<=g_stderr_verbosity);
+		_start_time_ns = now_ns();
+		log_to_everywhere(1, _verbosity, _file, _line, "{ ", _name);
+
+		if (_indent_stderr) {
+			++s_stderr_indentation;
+		}
+
+		for (auto &p : s_callbacks) {
+			if (_verbosity<=p.verbosity) {
+				++p.indentation;
+			}
 		}
 	}
 
