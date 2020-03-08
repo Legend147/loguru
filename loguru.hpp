@@ -393,15 +393,24 @@ namespace loguru
 		Verbosity_0       =  0,
 
 		// Verbosity levels 1-9 are generally not written to stderr, but are written to file.
-		Verbosity_1       = +1,
+      Verbosity_1       = +1,
+      Verbosity_INFO1   = +1,
 		Verbosity_2       = +2,
+		Verbosity_INFO2   = +2,
 		Verbosity_3       = +3,
+		Verbosity_INFO3   = +3,
 		Verbosity_4       = +4,
+		Verbosity_INFO4   = +4,
 		Verbosity_5       = +5,
+		Verbosity_INFO5   = +5,
 		Verbosity_6       = +6,
+		Verbosity_INFO6   = +6,
 		Verbosity_7       = +7,
+		Verbosity_INFO7   = +7,
 		Verbosity_8       = +8,
+		Verbosity_INFO8   = +8,
 		Verbosity_9       = +9,
+		Verbosity_INFO9   = +9,
 
 		// Don not use higher verbosity levels, as that will make grepping log files harder.
 		Verbosity_MAX     = +9,
